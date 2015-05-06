@@ -1,0 +1,612 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Writing a supervisor &mdash; PySimiam 1.0.0 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1.0.0',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="shortcut icon" href="_static/appicon_16x16.ico"/>
+    <link rel="top" title="PySimiam 1.0.0 documentation" href="contents.html" />
+    <link rel="next" title="Creating a controller" href="controller.html" />
+    <link rel="prev" title="Implementing your own robot" href="robot.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="controller.html" title="Creating a controller"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="robot.html" title="Implementing your own robot"
+             accesskey="P">previous</a> |</li>
+<li><img class="logo" src="_static/appicon.png" style="vertical-align:middle; margin-top: -1px" alt="Logo"/></li>
+<li><a href="index.html">PySimiam 1.0.0 documentation</a> &raquo;</li>
+ 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="writing-a-supervisor">
+<span id="supervisor-tutorial"></span><h1>Writing a supervisor<a class="headerlink" href="#writing-a-supervisor" title="Permalink to this headline">¶</a></h1>
+<p>A supervisor controls a robot. That means, that for a particular kind of robot,
+the supervisor can deduce the state of the robot (such as its pose) from the
+provided information (such as the reading of its wheel encoders), and set the
+inputs (such as wheel speeds) to make the robot attain a particular goal.</p>
+<p>In order to achieve this, the supervisor should subdivide achieving the goal
+into several small tasks and use one or more <a class="reference internal" href="controller.html#controller-tutorial"><span>controllers</span></a> to accomplish them.
+The controllers are supposed to be general, reusable robot behaviors, and the
+task of the supervisor is to choose a suitable controller and supply the expected
+parameters to it, as deduced from the particular robot&#8217;s parameters.</p>
+<div class="section" id="the-simple-case">
+<h2>The simple case<a class="headerlink" href="#the-simple-case" title="Permalink to this headline">¶</a></h2>
+<p>The simplest supervisor only has one behavior for the robot. In the constructor,
+the supervisor should create the corresponding controller and assign it to the
+<a class="reference internal" href="#supervisor.Supervisor.current" title="supervisor.Supervisor.current"><code class="xref py py-attr docutils literal"><span class="pre">current</span></code></a> variable. In order to load the controller,
+it is recommended to use the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.create_controller" title="supervisor.Supervisor.create_controller"><code class="xref py py-meth docutils literal"><span class="pre">create_controller()</span></code></a> method,
+that accepts a controller <a class="reference internal" href="code_simulator.html#module-string"><span>module string</span></a> and the initial
+parameters for the controller.</p>
+<p>The simulator will call the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.execute" title="supervisor.Supervisor.execute"><code class="xref py py-meth docutils literal"><span class="pre">execute()</span></code></a> method and
+supply the state of the robot, as returned by <code class="xref py py-meth docutils literal"><span class="pre">robot_info()</span></code>,
+and the elapsed time. By default, the supervisor will use the
+<a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.process_state_info" title="supervisor.Supervisor.process_state_info"><code class="xref py py-meth docutils literal"><span class="pre">process_state_info()</span></code></a> method to interpret the
+information about the robot and then use the structure returned by
+<a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_controller_state" title="supervisor.Supervisor.get_controller_state"><code class="xref py py-meth docutils literal"><span class="pre">get_controller_state()</span></code></a> to execute
+the controller. The return value of the controller is passed to the simulator
+and subsequently to the robot&#8217;s inputs. As the controller output may not be
+in the right format for the robot, you can overwrite the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.execute" title="supervisor.Supervisor.execute"><code class="xref py py-meth docutils literal"><span class="pre">execute()</span></code></a>
+method and transform the output before returning it to the simulator
+(see <code class="xref py py-meth docutils literal"><span class="pre">supervisors.khepera3.K3Supervisor.execute()</span></code> for an example)</p>
+</div>
+<div class="section" id="using-the-state-machine">
+<h2>Using the state machine<a class="headerlink" href="#using-the-state-machine" title="Permalink to this headline">¶</a></h2>
+<p>In a more complicated supervisor, there will be more than one controller, and
+thus more than one state. The base supervisor class implements a finite state
+machine to handle this. This state machine then switches between
+states (controllers) as the state of the robot and its environment changes.</p>
+<p>The state machine is defined as a set of controllers (states) and conditions, that would
+lead to a change of the current controller. To fully define one state,
+the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.add_controller" title="supervisor.Supervisor.add_controller"><code class="xref py py-meth docutils literal"><span class="pre">add_controller()</span></code></a> method of the supervisor should
+be called in the following way:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="bp">self</span><span class="o">.</span><span class="n">add_controller</span><span class="p">(</span><span class="n">c0</span><span class="p">,</span> <span class="p">(</span><span class="n">condition1</span><span class="p">,</span> <span class="n">c1</span><span class="p">),</span> <span class="p">(</span><span class="n">condition2</span><span class="p">,</span> <span class="n">c2</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>to add a state with a controller <code class="docutils literal"><span class="pre">c0</span></code>. The conditions are functions that take
+no parameters and evaluate to true or false. If a condition evaluates to true,
+the controller is switched e.g. to <code class="docutils literal"><span class="pre">c1</span></code> for <code class="docutils literal"><span class="pre">condition1</span></code>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Since the condition functions are called without any arguments, all
+of the parameters you want to access in them, should be stored in the supervisor.
+A good place to do that is the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.process_state_info" title="supervisor.Supervisor.process_state_info"><code class="xref py py-meth docutils literal"><span class="pre">process_state_info()</span></code></a> method,
+that is guaranteed to be called before any conditions are checked. In very
+complicated cases, that might not be covered by this state machine, you are welcome
+to overwrite the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.execute" title="supervisor.Supervisor.execute"><code class="xref py py-meth docutils literal"><span class="pre">execute()</span></code></a> method and implement
+a more fine-grained behavior.</p>
+</div>
+</div>
+<div class="section" id="run-time-access-to-parameters">
+<h2>Run-time access to parameters<a class="headerlink" href="#run-time-access-to-parameters" title="Permalink to this headline">¶</a></h2>
+<p>It is possible to let the user change some of the supervisor&#8217;s parameters when
+the simulation is running. The user can access the parameters by using the docking
+windows in the interface. Each window corresponds to one supervisor, and
+the content of the window is controlled completely by that supervisor.</p>
+<p>To define the interface, you will have to implement the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_ui_description" title="supervisor.Supervisor.get_ui_description"><code class="xref py py-meth docutils literal"><span class="pre">get_ui_description()</span></code></a> method.
+The return value is a dictionary, where every key corresponds to a value label
+or a value group label, and the values are either further dictionaries, or numbers,
+or strings. Let&#8217;s have a look at the following example:</p>
+<img alt="_images/dock_example.png" class="align-left" src="_images/dock_example.png" />
+<p>This dock was generated with the following code:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="k">def</span> <span class="nf">get_ui_description</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">p</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns the UI description for the docker&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span>
+
+    <span class="k">return</span> <span class="p">[(</span><span class="s">&#39;behavior&#39;</span><span class="p">,[</span>
+                <span class="p">(</span><span class="s">&#39;goal&#39;</span><span class="p">,</span> <span class="p">[</span>
+                    <span class="p">(</span><span class="s">&#39;x&#39;</span><span class="p">,</span><span class="n">p</span><span class="o">.</span><span class="n">behavior</span><span class="o">.</span><span class="n">goal</span><span class="o">.</span><span class="n">x</span><span class="p">),</span>
+                    <span class="p">(</span><span class="s">&#39;y&#39;</span><span class="p">,</span><span class="n">p</span><span class="o">.</span><span class="n">behavior</span><span class="o">.</span><span class="n">goal</span><span class="o">.</span><span class="n">y</span><span class="p">)]),</span>
+                <span class="p">((</span><span class="s">&#39;follow&#39;</span><span class="p">,</span> <span class="s">&#39;Follow walls&#39;</span><span class="p">),</span> <span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">behavior</span><span class="o">.</span><span class="n">follow</span><span class="p">,[</span><span class="s">&#39;yes&#39;</span><span class="p">,</span><span class="s">&#39;no&#39;</span><span class="p">])),</span>
+                <span class="p">]),</span>
+            <span class="p">((</span><span class="s">&#39;pid&#39;</span><span class="p">,</span><span class="s">&#39;PID close parameters&#39;</span><span class="p">,</span><span class="s">&#39;close&#39;</span><span class="p">),[</span>
+                <span class="p">((</span><span class="s">&#39;kp&#39;</span><span class="p">,</span><span class="s">&#39;Proportional gain&#39;</span><span class="p">),</span> <span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">[</span><span class="s">&#39;close&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">kp</span><span class="p">),</span>
+                <span class="p">((</span><span class="s">&#39;ki&#39;</span><span class="p">,</span><span class="s">&#39;Integral gain&#39;</span><span class="p">),</span> <span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">[</span><span class="s">&#39;close&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">ki</span><span class="p">),</span>
+                <span class="p">((</span><span class="s">&#39;kd&#39;</span><span class="p">,</span><span class="s">&#39;Differential gain&#39;</span><span class="p">),</span> <span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">[</span><span class="s">&#39;close&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">kd</span><span class="p">)</span>
+                <span class="p">]),</span>
+            <span class="p">((</span><span class="s">&#39;pid&#39;</span><span class="p">,</span><span class="s">&#39;PID far parameters&#39;</span><span class="p">,</span><span class="s">&#39;far&#39;</span><span class="p">),</span> <span class="p">[</span>
+                <span class="p">((</span><span class="s">&#39;kp&#39;</span><span class="p">,</span><span class="s">&#39;Proportional gain&#39;</span><span class="p">),</span> <span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">[</span><span class="s">&#39;far&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">kp</span><span class="p">),</span>
+                <span class="p">((</span><span class="s">&#39;ki&#39;</span><span class="p">,</span><span class="s">&#39;Integral gain&#39;</span><span class="p">),</span> <span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">[</span><span class="s">&#39;far&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">ki</span><span class="p">),</span>
+                <span class="p">((</span><span class="s">&#39;kd&#39;</span><span class="p">,</span><span class="s">&#39;Differential gain&#39;</span><span class="p">),</span> <span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">[</span><span class="s">&#39;far&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">kd</span><span class="p">)</span>
+                <span class="p">])</span>
+            <span class="p">]</span>
+</pre></div>
+</div>
+<p>As you see, every (key, value) tuple in the list that is returned from <code class="docutils literal"><span class="pre">get_ui_description</span></code>
+corresponds to an interface element. The type of the element depends on the type of <cite>value</cite>.
+<code class="docutils literal"><span class="pre">('x',3.0)</span></code> will create a spin-box, <code class="docutils literal"><span class="pre">('color',('yellow',['red','yellow','green']))</span></code> - a set
+of radio-buttons <cite>red</cite>, <cite>yellow</cite> and <cite>green</cite> with <cite>yellow</cite> selected, and
+<code class="docutils literal"><span class="pre">('goal',</span> <span class="pre">[</span> <span class="pre">('x',1.0),</span> <span class="pre">('y',</span> <span class="pre">1.0)]</span> <span class="pre">)</span></code> a grouping box with two spin-boxes inside.</p>
+<p>The key may be a string or a tuple with two or three values. The string or the
+first field of the tuple is the name of the field in the structure, like <code class="docutils literal"><span class="pre">p.behavior</span></code>
+above. It is also the name of an XML tag that corresponds to this element if
+the parameters are saved to a file. If the tuple has a second field, it is used
+as a label. In the case no label is supplied, the field name is capitalized and used
+as a label. A third field in the tuple is useful in the case you have two or more identical
+structures in your parameters. It is translated to the <cite>id</cite> attribute of the XML
+tag and to the key of the dictionary, that becomes a field of the parameters
+structure.</p>
+<p>In the example above, the <cite>p</cite> argument of <code class="docutils literal"><span class="pre">get_ui_description</span></code> has a structure
+identical to the one that will be supplied to <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.set_parameters" title="supervisor.Supervisor.set_parameters"><code class="xref py py-meth docutils literal"><span class="pre">set_parameters()</span></code></a>
+method if the user clicks <cite>Apply</cite> in the dock. Although this is not required, it can considerably
+simplify <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_parameters" title="supervisor.Supervisor.get_parameters"><code class="xref py py-meth docutils literal"><span class="pre">get_parameters()</span></code></a>, from which such a structure has to be returned.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The implementation of the Khepera3 supervisors use the same structure
+<code class="docutils literal"><span class="pre">self.parameters</span></code> to both store the parameters and to pass parameters to controllers.
+This behavior is neither compulsory nor ideal. In the general case, the controllers
+might require differently structured information.</p>
+</div>
+</div>
+<div class="section" id="drawing-additional-stuff">
+<h2>Drawing additional stuff<a class="headerlink" href="#drawing-additional-stuff" title="Permalink to this headline">¶</a></h2>
+<p>The supervisor can also convey some information to the user by drawing on the view.
+This can be used e.g. to debug the controllers and the supervisor itself.
+The drawing happens in the <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.draw" title="supervisor.Supervisor.draw"><code class="xref py py-meth docutils literal"><span class="pre">draw()</span></code></a> function, that
+takes a single <a class="reference internal" href="code_ui.html#renderer.Renderer" title="renderer.Renderer"><code class="xref py py-class docutils literal"><span class="pre">Renderer</span></code></a> parameter. Drawing happens after the
+<a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.execute" title="supervisor.Supervisor.execute"><code class="xref py py-meth docutils literal"><span class="pre">execute()</span></code></a> has been called, and so the supervisor
+can draw content directly related to the current state of the world.</p>
+</div>
+<div class="section" id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt>
+<em class="property">class </em><code class="descclassname">supervisor.</code><code class="descname">Supervisor</code><span class="sig-paren">(</span><em>robot_pose</em>, <em>robot_info</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>The supervisor class oversees the control of a single robot.
+The supervisor does not move the robot directly. Instead, the supervisor
+selects a controller to do the work and uses the controller outputs
+to generate the robot inputs.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>robot_pose</strong> (<a class="reference internal" href="code_simobject.html#pose.Pose" title="pose.Pose"><code class="xref py py-class docutils literal"><span class="pre">Pose</span></code></a>) &#8211; The initial pose of the robot,</li>
+<li><strong>robot_info</strong> (<a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a>) &#8211; Info structure, the format defined by the robot&#8217;s
+<a class="reference internal" href="code_robot.html#robot.Robot.get_info" title="robot.Robot.get_info"><code class="xref py py-meth docutils literal"><span class="pre">get_info()</span></code></a></li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Any extension of pysimiam will require inheriting from this superclass.
+The important methods that have to be implemented to control a robot are
+<a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.estimate_pose" title="supervisor.Supervisor.estimate_pose"><code class="xref py py-meth docutils literal"><span class="pre">estimate_pose()</span></code></a>, <code class="xref py py-meth docutils literal"><span class="pre">process()</span></code>,
+<a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.init_default_parameters" title="supervisor.Supervisor.init_default_parameters"><code class="xref py py-meth docutils literal"><span class="pre">init_default_parameters()</span></code></a> and <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_ui_description" title="supervisor.Supervisor.get_ui_description"><code class="xref py py-meth docutils literal"><span class="pre">get_ui_description()</span></code></a>.</p>
+<p>The base class implements a state machine for switching between different
+controllers. See <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.add_controller" title="supervisor.Supervisor.add_controller"><code class="xref py py-meth docutils literal"><span class="pre">add_controller()</span></code></a> for more information.</p>
+<dl class="attribute">
+<dt id="supervisor.Supervisor.initial_pose">
+<code class="descname">initial_pose</code><a class="headerlink" href="#supervisor.Supervisor.initial_pose" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body"><a class="reference internal" href="code_simobject.html#pose.Pose" title="pose.Pose"><code class="xref py py-class docutils literal"><span class="pre">Pose</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>The initial pose of the robot, as supplied to the constructor. This parameter can be used in the user implementation</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="supervisor.Supervisor.pose_est">
+<code class="descname">pose_est</code><a class="headerlink" href="#supervisor.Supervisor.pose_est" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body"><a class="reference internal" href="code_simobject.html#pose.Pose" title="pose.Pose"><code class="xref py py-class docutils literal"><span class="pre">Pose</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>The estimated pose of the robot. This variable is updated automatically in
+the beginning of the calculation cycle using <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.estimate_pose" title="supervisor.Supervisor.estimate_pose"><code class="xref py py-meth docutils literal"><span class="pre">estimate_pose()</span></code></a></p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="supervisor.Supervisor.parameters">
+<code class="descname">parameters</code><a class="headerlink" href="#supervisor.Supervisor.parameters" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body"><a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>Current parameter structure of the supervisor. Updated in <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.set_parameters" title="supervisor.Supervisor.set_parameters"><code class="xref py py-meth docutils literal"><span class="pre">set_parameters()</span></code></a></p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="supervisor.Supervisor.current">
+<code class="descname">current</code><a class="headerlink" href="#supervisor.Supervisor.current" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body"><a class="reference internal" href="code_sup_contr.html#controller.Controller" title="controller.Controller"><code class="xref py py-class docutils literal"><span class="pre">Controller</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>The current controller to be executed in <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.execute" title="supervisor.Supervisor.execute"><code class="xref py py-meth docutils literal"><span class="pre">execute()</span></code></a>.
+The subclass can set this value in <code class="xref py py-meth docutils literal"><span class="pre">process()</span></code>
+or in the constructor. In case the state machine is used, the current
+controller will be switched automatically.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="supervisor.Supervisor.states">
+<code class="descname">states</code><a class="headerlink" href="#supervisor.Supervisor.states" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body">{<a class="reference internal" href="code_sup_contr.html#controller.Controller" title="controller.Controller"><code class="xref py py-class docutils literal"><span class="pre">Controller</span></code></a>: [(condition()-&gt;bool,:class:<cite>~controller.Controller</cite>)]}</td>
+</tr>
+</tbody>
+</table>
+<p>The transition table of the state machine. The keys of the
+dictionary are the state. The conditions are executed one after
+another until one returns True or the list is through. If one
+of the conditions evaluates to True, its corresponding controller
+is made current.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="supervisor.Supervisor.robot">
+<code class="descname">robot</code><a class="headerlink" href="#supervisor.Supervisor.robot" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body"><a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>The robot information structure given by the robot.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="supervisor.Supervisor.robot_color">
+<code class="descname">robot_color</code><a class="headerlink" href="#supervisor.Supervisor.robot_color" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Type:</th><td class="field-body">int</td>
+</tr>
+</tbody>
+</table>
+<p>The color of the robot in the view (useful for drawing).</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">add_controller</code><span class="sig-paren">(</span><em>controller</em>, <em>*args</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.add_controller"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Add a transition table for a state with controller</p>
+<p>The arguments are (function, controller) tuples.
+The functions cannot take any arguments.
+Each step, the functions are executed in the order
+they were supplied to this function. If a function
+evaluates to True, the current controller switches to the
+one specified with this function. The target controller
+is restarted using <a class="reference internal" href="code_sup_contr.html#controller.Controller.restart" title="controller.Controller.restart"><code class="xref py py-meth docutils literal"><span class="pre">controller.Controller.restart()</span></code></a>.</p>
+<p>The functions are guaranteed to be called after <code class="xref py py-meth docutils literal"><span class="pre">process()</span></code>.
+Thus, <a class="reference internal" href="code_robot.html#module-robot" title="robot"><code class="xref py py-attr docutils literal"><span class="pre">robot</span></code></a> should contain actual information about the robot.</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">create_controller</code><span class="sig-paren">(</span><em>module_string</em>, <em>parameters</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.create_controller"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Create and return a controller instance for a given controller class.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>module_string</strong> (<em>string</em>) &#8211; a string specifying a class in a module.
+See <a class="reference internal" href="code_simulator.html#module-string"><span>Module strings</span></a></li>
+<li><strong>parameters</strong> &#8211; a parameter structure to be passed to the controller constructor</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">draw</code><span class="sig-paren">(</span><em>renderer</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.draw"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Draw anything in the view.</p>
+<p>This will be called before anything else is drawn (except the grid)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>renderer</strong> (<a class="reference internal" href="code_ui.html#renderer.Renderer" title="renderer.Renderer"><code class="xref py py-class docutils literal"><span class="pre">Renderer</span></code></a>) &#8211; A renderer to draw with</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">estimate_pose</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.estimate_pose"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Updates the pose using odometry calculations.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The estimated robot pose</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="code_simobject.html#pose.Pose" title="pose.Pose"><code class="xref py py-class docutils literal"><span class="pre">Pose</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>The result of the evaluation of this function will be used to set <code class="docutils literal"><span class="pre">self.pose_est</span></code></p>
+<p>Must be implemented in subclasses.</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">execute</code><span class="sig-paren">(</span><em>robot_info</em>, <em>dt</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.execute"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Based on robot state and elapsed time, return the parameters
+for robot motion.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>robot_info</strong> (<a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a>) &#8211; The state of the robot</li>
+<li><strong>dt</strong> (<em>float</em>) &#8211; The amount of time elapsed since the last call of <cite>execute</cite>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">An object (normally a tuple) that will be passed to the robot&#8217;s <a class="reference internal" href="code_robot.html#robot.Robot.set_inputs" title="robot.Robot.set_inputs"><code class="xref py py-meth docutils literal"><span class="pre">set_inputs()</span></code></a> method.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The default implementation proceeds as follows:</p>
+<ol class="arabic">
+<li><dl class="first docutils">
+<dt>Proccess the state information using <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.process_state_info" title="supervisor.Supervisor.process_state_info"><code class="xref py py-meth docutils literal"><span class="pre">process_state_info()</span></code></a></dt>
+<dd><ol class="first last arabic simple">
+<li>Store robot information in <a class="reference internal" href="#supervisor.Supervisor.robot" title="supervisor.Supervisor.robot"><code class="xref py py-attr docutils literal"><span class="pre">robot</span></code></a></li>
+<li>Estimate the new robot pose with odometry and store it in <a class="reference internal" href="#supervisor.Supervisor.pose_est" title="supervisor.Supervisor.pose_est"><code class="xref py py-attr docutils literal"><span class="pre">pose_est</span></code></a></li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><p class="first">Check if the controller has to be switched</p>
+</li>
+<li><p class="first">Get controller state from <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_controller_state" title="supervisor.Supervisor.get_controller_state"><code class="xref py py-meth docutils literal"><span class="pre">get_controller_state()</span></code></a></p>
+</li>
+<li><p class="first">Execute currently selected controller with the parameters from previous step</p>
+</li>
+<li><p class="first">Return unicycle model parameters as an output (velocity, omega)</p>
+</li>
+</ol>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">get_controller_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.get_controller_state"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Get the parameters that the current controller needs for operation</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A parameter structure in the format appropriate for the current controller.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a></td>
+</tr>
+</tbody>
+</table>
+<p>The result of this function will be used to run the controller.</p>
+<p>Must be implemented in subclasses</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">get_parameters</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.get_parameters"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Get the parameter structure of the supervisor.
+A call to <code class="docutils literal"><span class="pre">supervisor.set_parameters(supervisor.get_parameters())</span></code>
+should not change the supervisor&#8217;s state</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A supervisor-specific parameter structure.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">get_ui_description</code><span class="sig-paren">(</span><em>params=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.get_ui_description"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Return a list describing the parameters available to the user.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>params</strong> (<a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a>) &#8211; An instance of the paramaters structure as returned
+from get_parameters. If not specified, this method
+should use <a class="reference internal" href="#supervisor.Supervisor.parameters" title="supervisor.Supervisor.parameters"><code class="xref py py-attr docutils literal"><span class="pre">parameters</span></code></a></td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">A list describing the interface</td>
+</tr>
+</tbody>
+</table>
+<p>The structure returned by this function is used in the interface
+to show a window where the user can adjust the supervisor parameters.
+When the user confirms the changed parameters, this structure is used
+to create the structure that will be passed to <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.set_parameters" title="supervisor.Supervisor.set_parameters"><code class="xref py py-meth docutils literal"><span class="pre">set_parameters()</span></code></a>.</p>
+<p>The format of the returned object is as follows:</p>
+<ul class="simple">
+<li>The object is a list of tuples. The order of tuples defines the order
+of fields.</li>
+<li>The first part of a tuple (key) is either a string or a tuple.
+If it is a tuple, then the first value is the name of the parameter field,
+the second value is an UI label, and the third is an optional string
+identifier if the parameter structure has several fields, identical in
+structure. If the key is a string, it is used both as a label, capitalized,
+and as a field name.</li>
+<li>The second part of a tuple (value) is either a float, in which case
+it describes one parameter, or a (string, list of strings) tuple,
+for multiple-choice paramaters, or lists, structured the same way
+the root list is structured.</li>
+</ul>
+<p>Must be implemented in subclasses.</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">init_default_parameters</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.init_default_parameters"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Populate <a class="reference internal" href="#supervisor.Supervisor.parameters" title="supervisor.Supervisor.parameters"><code class="xref py py-attr docutils literal"><span class="pre">parameters</span></code></a> with default values</p>
+<p>Must be implemented in subclasses.</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">process_state_info</code><span class="sig-paren">(</span><em>state</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.process_state_info"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Evaluate the information about the robot and set state variables.</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="descname">set_parameters</code><span class="sig-paren">(</span><em>params</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/supervisor.html#Supervisor.set_parameters"><span class="viewcode-link">[source]</span></a></dt>
+<dd><p>Update this supervisor parameters. The <cite>params</cite> will have the same
+structure as specified by <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_ui_description" title="supervisor.Supervisor.get_ui_description"><code class="xref py py-meth docutils literal"><span class="pre">get_ui_description()</span></code></a></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>params</strong> (<a class="reference internal" href="code_simulator.html#helpers.Struct" title="helpers.Struct"><code class="xref py py-class docutils literal"><span class="pre">Struct</span></code></a>) &#8211; An instance of the paramaters structure as can be returned
+from <a class="reference internal" href="code_sup_contr.html#supervisor.Supervisor.get_parameters" title="supervisor.Supervisor.get_parameters"><code class="xref py py-meth docutils literal"><span class="pre">get_parameters()</span></code></a>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="contents.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Writing a supervisor</a><ul>
+<li><a class="reference internal" href="#the-simple-case">The simple case</a></li>
+<li><a class="reference internal" href="#using-the-state-machine">Using the state machine</a></li>
+<li><a class="reference internal" href="#run-time-access-to-parameters">Run-time access to parameters</a></li>
+<li><a class="reference internal" href="#drawing-additional-stuff">Drawing additional stuff</a></li>
+<li><a class="reference internal" href="#api">API</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="robot.html"
+                        title="previous chapter">Implementing your own robot</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="controller.html"
+                        title="next chapter">Creating a controller</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/supervisor.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="controller.html" title="Creating a controller"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="robot.html" title="Implementing your own robot"
+             >previous</a> |</li>
+<li><img class="logo" src="_static/appicon.png" style="vertical-align:middle; margin-top: -1px" alt="Logo"/></li>
+<li><a href="index.html">PySimiam 1.0.0 documentation</a> &raquo;</li>
+ 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2013, Timofey Fuchs, Shaun Lippy, John Alexander, Vidam Govorovski, Jonathan Whitten.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.1.
+    </div>
+  </body>
+</html>
